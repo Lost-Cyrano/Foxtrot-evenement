@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des Promotions - Division Fowtrot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 400px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Gestion des Promotions</h1>
+
+        <!-- Formulaire de recherche de membre -->
+        <div>
+            <h2>Rechercher un membre</h2>
+            <input type="text" id="searchNickname" placeholder="Entrer le surnom">
+            <button id="searchButton">Rechercher</button>
+        </div>
+
+        <!-- Section pour ajouter un événement -->
+        <div id="eventSection" class="hidden">
+            <h2>Ajouter un événement pour <span id="membreNom"></span></h2>
+            <select id="eventSelect">
+                <option value="entrainement">Participation à un entraînement (+10)</option>
+                <option value="operation">Participation à une opération (+25)</option>
+                <option value="retard">Retard (-5)</option>
+                <option value="absence">Inscription sans présence (-10)</option>
+            </select>
+            <button id="addEventButton">Ajouter événement</button>
+        </div>
+
+        <!-- Message de confirmation -->
+        <div id="message" class="message hidden"></div>
+    </div>
+
+    <script type="module">
+        // Initialisation de Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+        import { getDatabase, ref, get, set, update } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCvE6j53dus751QHA9f7uSK36bCnRwQfyU",
+            authDomain: "division-fowtrot.firebaseapp.com",
+            databaseURL: "https://division-fowtrot-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "division-fowtrot",
+            storageBucket: "division-fowtrot.appspot.com",
+            messagingSenderId: "1001043194767",
+            appId: "1:1001043194767:web:6e6ae49ddb5e1b3ba951fa",
+            measurementId: "G-07076VM4GV"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // Variables globales
+        let currentMembre = null;
+
+        // Fonction de recherche d'un membre
+        async function rechercherMembre(surnom) {
+            const membreRef = ref(database, 'membres/' + surnom);
+            const snapshot = await get(membreRef);
+            if (snapshot.exists()) {
+                return snapshot.val();
+            } else {
+                return null;
+            }
+        }
+
+        // Fonction pour créer un nouveau membre
+        async function creerMembre(surnom, grade, pointsDeBase) {
+            const membreRef = ref(database, 'membres/' + surnom);
+            await set(membreRef, {
+                grade: grade,
+                points: pointsDeBase,
+                historique: []
+            });
+        }
+
+        // Fonction pour ajouter des points à un membre
+        async function ajouterEvenement(surnom, evenement, points) {
+            const membreRef = ref(database, 'membres/' + surnom);
+            const snapshot = await get(membreRef);
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const nouveauxPoints = data.points + points;
+                const historique = data.historique || [];
+                historique.push({
+                    evenement: evenement,
+                    points: points,
+                    date: new Date().toISOString()
+                });
+
+                // Mise à jour des points et de l'historique
+                await update(membreRef, {
+                    points: nouveauxPoints,
+                    historique: historique
+                });
+                afficherMessage("Points ajoutés avec succès !");
+            } else {
+                afficherMessage("Membre introuvable !");
+            }
+        }
+
+        // Fonction pour afficher un message
+        function afficherMessage(message) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.classList.remove('hidden');
+            setTimeout(() => {
+                messageDiv.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Gestion des événements
+        document.getElementById('searchButton').addEventListener('click', async () => {
+            const surnom = document.getElementById('searchNickname').value;
+            currentMembre = await rechercherMembre(surnom);
+
+            if (currentMembre) {
+                document.getElementById('membreNom').innerText = surnom;
+                document.getElementById('eventSection').classList.remove('hidden');
+                afficherMessage(`Membre ${surnom} trouvé.`);
+            } else {
+                const grade = prompt("Le membre n'existe pas, veuillez entrer son grade :");
+                const pointsDeBase = getPointsDeBase(grade);
+                await creerMembre(surnom, grade, pointsDeBase);
+                afficherMessage(`Membre créé avec ${pointsDeBase} points.`);
+            }
+        });
+
+        document.getElementById('addEventButton').addEventListener('click', async () => {
+            const evenement = document.getElementById('eventSelect').value;
+            const pointsMap = {
+                "entrainement": 10,
+                "operation": 25,
+                "retard": -5,
+                "absence": -10
+            };
+            const points = pointsMap[evenement];
+            const surnom = document.getElementById('membreNom').innerText;
+            await ajouterEvenement(surnom, evenement, points);
+        });
+
+        function getPointsDeBase(grade) {
+            const grades = {
+                "COL": 0, "LCL": 0, "CDT": 0,
+                "CNE": 1000, "LTN": 800, "SLT": 600, "ASP": 400,
+                "MAJ": 300, "ADC": 200, "ADJ": 150, "SCH": 120, "SGT": 100,
+                "CC1": 75, "CCH": 50, "CAL": 25, "1CL": 15, "SDT": 0
+            };
+            return grades[grade.toUpperCase()] || 0;
+        }
+    </script>
+
+</body>
+</html>
